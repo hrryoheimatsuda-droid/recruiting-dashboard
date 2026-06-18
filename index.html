@@ -409,9 +409,9 @@ function render(nodes,kpi,leftAlign,pinLeft){
 }
 
 function renderTab(data){
-  // ホバー用に pipelineKPI を渡す。採用計画タブは左寄せ（CEO直下を一番左に）
+  // ホバー用に pipelineKPI を渡す。採用計画タブは中央揃え（各グループの下にポジションを中央寄せ）
   const kpi=data.pipelineKPI||{months:[],data:{}};
-  render(buildRecruitNodes(data),kpi,true,PIN_LEFT);
+  render(buildRecruitNodes(data),kpi,false,PIN_LEFT);
 }
 
 let currentPeriod='total';
