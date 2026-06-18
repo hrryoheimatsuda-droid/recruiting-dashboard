@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>松田サンプルエンジニアリング｜採用ダッシュボード</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f4f3f0;--surface:#fff;--border:#ddd;--muted:#888;
+  --navy:#1a3a6b;
+  --blue-bg:#e3f2fd;--blue-bd:#1976d2;--blue-tx:#0d47a1;
+  --red-bg:#fff0f0;--red-bd:#e53935;--red-tx:#b71c1c;
+  --green-bg:#e8f5e9;--green-bd:#43a047;--green-tx:#1b5e20;
+  --gray-bg:#f5f5f5;--gray-bd:#bdbdbd;--gray-tx:#757575;
+}
+body{font-family:'Noto Sans JP','Hiragino Sans',sans-serif;background:var(--bg);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+#header{background:var(--navy);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+#header h1{font-size:15px;font-weight:700}
+#status-bar{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px}
+#last-updated{opacity:.75}
+#dot{width:8px;height:8px;border-radius:50%;background:#4caf50;flex-shrink:0}
+#dot.loading{background:#ff9800;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+#tabs{background:var(--surface);border-bottom:1px solid var(--border);padding:0 18px;display:flex;align-items:flex-end;flex-shrink:0}
+.tab{padding:8px 18px;font-size:12px;font-weight:600;color:var(--muted);border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;cursor:pointer;margin-bottom:-1px;background:transparent;transition:all .15s}
+.tab:hover{color:var(--navy);background:var(--bg)}
+.tab.active{color:var(--navy);background:var(--surface);border-color:var(--border);border-bottom-color:var(--surface)}
+#btn-refresh{margin-left:auto;margin-bottom:6px;padding:4px 12px;background:var(--navy);color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer}
+#btn-refresh:hover{opacity:.85}
+
+#legend{background:var(--surface);border-bottom:1px solid var(--border);padding:5px 18px;display:flex;gap:12px;flex-shrink:0;flex-wrap:wrap;align-items:center;min-height:32px}
+.leg{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+.leg-dot{width:9px;height:9px;border-radius:2px;border:1.5px solid;flex-shrink:0}
+.urg{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid;white-space:nowrap}
+.urg-vh{background:#ffebee;color:#c62828;border-color:#ef9a9a}
+.urg-h {background:#fff3e0;color:#e65100;border-color:#ffcc80}
+.urg-m {background:#fffde7;color:#f57f17;border-color:#fff176}
+.urg-l {background:#f5f5f5;color:#757575;border-color:#e0e0e0}
+
+#canvas-wrap{flex:1;overflow:auto;position:relative}
+#canvas{position:relative}
+svg#edges{position:absolute;inset:0;pointer-events:none;overflow:visible}
+
+.node{position:absolute;border-radius:9px;border:1.5px solid;padding:7px 9px;width:138px;text-align:center;cursor:default}
+.node.has-pipeline{cursor:default}
+.node-label{font-size:11px;font-weight:700;line-height:1.35;margin-bottom:2px}
+.node-area{font-size:10px;opacity:.65;margin-bottom:2px}
+.node-status{font-size:10px;padding:1px 7px;border-radius:10px;font-weight:600;display:inline-block;margin-bottom:2px}
+.node-meta{font-size:10px;margin-top:4px;padding-top:4px;border-top:1px solid rgba(0,0,0,.09);display:flex;flex-wrap:wrap;gap:3px;justify-content:center;align-items:center}
+.node-deadline{color:var(--muted);font-size:10px}
+
+.n-hdr{background:var(--navy);border-color:#0d2d5e}
+.n-hdr .node-label{color:#fff;font-size:12px}
+.n-existing{background:var(--blue-bg);border-color:var(--blue-bd)}
+.n-existing .node-label{color:var(--blue-tx)}
+.n-recruit{background:var(--red-bg);border-color:var(--red-bd)}
+.n-recruit .node-label{color:var(--red-tx)}
+.n-recruit .node-status{background:#ffcdd2;color:var(--red-tx)}
+.n-decided{background:var(--green-bg);border-color:var(--green-bd)}
+.n-decided .node-label{color:var(--green-tx)}
+.n-decided .node-status{background:#c8e6c9;color:var(--green-tx)}
+.n-closed{background:var(--gray-bg);border-color:var(--gray-bd)}
+.n-closed .node-label{color:var(--gray-tx)}
+.n-closed .node-status{background:#e0e0e0;color:var(--gray-tx)}
+.n-str-hdr{background:var(--navy);border-color:#0d2d5e}
+.n-str-hdr .node-label{color:#fff;font-size:12px}
+.n-str-node{background:var(--blue-bg);border-color:var(--blue-bd)}
+.n-str-node .node-label{color:var(--blue-tx)}
+
+#loading{display:flex;position:absolute;inset:0;align-items:center;justify-content:center;color:var(--muted);font-size:14px}
+
+/* パイプラインタブ */
+.period-btn{font-size:11px;padding:3px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--muted);cursor:pointer}
+.period-btn:hover{background:var(--bg)}
+.period-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.mlegend-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
+.mlegend-dot{width:9px;height:9px;border-radius:2px}
+#pipeline-wrap{display:none;flex:1;overflow:auto;padding:16px}
+#pipeline-wrap.show{display:block}
+.pos-funnel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+.pos-funnel-title{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.funnel-grid{display:flex;gap:6px;align-items:flex-end;overflow-x:auto;padding-bottom:8px}
+.phase-col{display:flex;flex-direction:column;align-items:center;min-width:78px;flex-shrink:0}
+.phase-bars{display:flex;gap:4px;align-items:flex-end;height:160px}
+.bar-group{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.bar-stack{display:flex;flex-direction:column-reverse;width:26px;border-radius:3px 3px 0 0;overflow:hidden}
+.bar-seg{width:100%;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:600;min-height:14px}
+.bar-total{font-size:10px;font-weight:700;color:#333;margin-bottom:2px}
+.bar-label{font-size:9px;color:var(--muted);margin-top:3px}
+.phase-name{font-size:10px;font-weight:600;color:#444;margin-top:6px;text-align:center;line-height:1.2}
+
+/* ── パイプラインポップアップ ── */
+#popup{
+  display:none;position:fixed;z-index:1000;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);
+  padding:14px 16px;width:auto;min-width:280px;max-width:460px;
+  pointer-events:none;
+}
+#popup.show{display:block}
+#popup-title{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.popup-note{font-size:10px;color:var(--muted);margin-bottom:6px}
+.pipe-table{width:100%;border-collapse:collapse;font-size:11px}
+.pipe-table th{padding:4px 8px;text-align:center;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border);border-left:1px solid transparent;border-right:1px solid transparent}
+.pipe-table th:first-child{text-align:left}
+.pipe-table td{padding:5px 8px;text-align:center;border-bottom:1px solid #f0f0f0;border-left:1px solid transparent;border-right:1px solid transparent}
+.pipe-table td:first-child{text-align:left;font-weight:600;color:#333}
+.pipe-table tr:last-child td{border-bottom:none}
+.pipe-table .tgt{color:var(--muted);font-weight:400}
+.pipe-table .total-cell{border-left:1px solid var(--border);background:#fafafa}
+.pipe-no-data{font-size:12px;color:var(--muted);text-align:center;padding:8px 0}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="header">
+  <h1>&#128197; 松田サンプルエンジニアリング｜採用ダッシュボード</h1>
+  <div id="status-bar">
+    <div id="dot" class="loading"></div>
+    <span id="last-updated">読み込み中...</span>
+  </div>
+</div>
+
+<div id="tabs">
+  <button class="tab active" data-tab="recruit">&#128269; 採用計画</button>
+  <button class="tab" data-tab="pipeline">&#128202; パイプライン</button>
+  <button id="btn-refresh">&#8635; 今すぐ更新</button>
+</div>
+
+<div id="legend">
+  <div id="leg-recruit" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <span class="leg"><span class="leg-dot" style="background:var(--navy);border-color:#0d2d5e"></span>CEO/Gr</span>
+    <span class="leg"><span class="leg-dot" style="background:var(--blue-bg);border-color:var(--blue-bd)"></span>既存</span>
+    <span class="leg"><span class="leg-dot" style="background:var(--red-bg);border-color:var(--red-bd)"></span>募集中</span>
+    <span class="leg"><span class="leg-dot" style="background:var(--green-bg);border-color:var(--green-bd)"></span>決定</span>
+    <span class="leg"><span class="leg-dot" style="background:var(--gray-bg);border-color:var(--gray-bd)"></span>クローズ</span>
+    <span class="leg" style="gap:4px">緊急度:
+      <span class="urg urg-vh">Very High</span>
+      <span class="urg urg-h">High</span>
+      <span class="urg urg-m">Middle</span>
+      <span class="urg urg-l">Low</span>
+    </span>
+  </div>
+  <div id="leg-pipeline" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:11px;color:var(--muted);margin-right:4px">表示期間:</span>
+    <button class="period-btn active" data-period="total">通算のみ</button>
+    <button class="period-btn" data-period="recent3">直近3ヶ月</button>
+    <button class="period-btn" data-period="all">通算＋全月</button>
+    <span id="month-legend" style="display:flex;gap:8px;align-items:center;margin-left:12px"></span>
+  </div>
+</div>
+
+<div id="canvas-wrap">
+  <div id="canvas">
+    <svg id="edges"></svg>
+    <div id="loading">データを読み込んでいます...</div>
+  </div>
+</div>
+<div id="pipeline-wrap"></div>
+
+<div id="popup">
+  <div id="popup-title"></div>
+  <div id="popup-body"></div>
+</div>
+
+<script>
+const SAMPLE_DATA = {"positions":[{"id":"1","name":"経営企画マネージャー","area":"経営企画","urgency":"Middle","deadline":"9/30","status":"公開準備中","parent":"CEO"},{"id":"2","name":"エンタープライズセールス","area":"新規開拓","urgency":"Very High","deadline":"7/31","status":"公開中","parent":"セールスGr"},{"id":"3","name":"SDR","area":"インサイドセールス","urgency":"High","deadline":"","status":"公開中","parent":"セールスGr"},{"id":"4","name":"カスタマーサクセスマネージャー","area":"既存顧客","urgency":"Middle","deadline":"","status":"公開準備中","parent":"カスタマーサクセスGr"},{"id":"5","name":"コンテンツマーケター","area":"コンテンツ","urgency":"Middle","deadline":"","status":"公開中","parent":"マーケティングGr"},{"id":"6","name":"シニアプロダクトマネージャー","area":"プロダクト","urgency":"High","deadline":"","status":"決定","parent":"プロダクトGr"},{"id":"7","name":"フロントエンドエンジニア","area":"フロントエンド","urgency":"High","deadline":"8/31","status":"公開中","parent":"エンジニアリングGr"},{"id":"8","name":"SRE","area":"インフラ","urgency":"Very High","deadline":"7/31","status":"公開中","parent":"エンジニアリングGr"},{"id":"9","name":"QAエンジニア","area":"品質保証","urgency":"Low","deadline":"","status":"クローズ","parent":"エンジニアリングGr"},{"id":"10","name":"採用人事","area":"採用","urgency":"High","deadline":"","status":"公開中","parent":"コーポレートGr"}],"members":[{"area":"セールス","role":"フィールドセールス","parent":"セールスGr"},{"area":"マネジメント","role":"セールスマネージャー","parent":"セールスGr"},{"area":"CS","role":"カスタマーサクセス","parent":"カスタマーサクセスGr"},{"area":"マーケ","role":"デジタルマーケター","parent":"マーケティングGr"},{"area":"プロダクト","role":"プロダクトマネージャー","parent":"プロダクトGr"},{"area":"開発","role":"テックリード","parent":"エンジニアリングGr"},{"area":"バックエンド","role":"バックエンドエンジニア","parent":"エンジニアリングGr"},{"area":"マネジメント","role":"エンジニアリングマネージャー","parent":"エンジニアリングGr"},{"area":"経理","role":"経理","parent":"コーポレートGr"},{"area":"労務","role":"労務","parent":"コーポレートGr"}],"pipelineKPI":{"months":["通算","1月","2月","3月","4月","5月","6月"],"data":{"経営企画マネージャー":{"1月":{"応募":{"actual":19,"target":18},"書類":{"actual":10,"target":10},"一次設定":{"actual":6,"target":6},"一次実施":{"actual":5,"target":5},"一次合格":{"actual":4,"target":4},"二次設定":{"actual":3,"target":3},"二次実施":{"actual":3,"target":3},"二次合格":{"actual":2,"target":2},"最終設定":{"actual":2,"target":2},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"2月":{"応募":{"actual":18,"target":20},"書類":{"actual":10,"target":11},"一次設定":{"actual":6,"target":7},"一次実施":{"actual":6,"target":6},"一次合格":{"actual":4,"target":4},"二次設定":{"actual":4,"target":4},"二次実施":{"actual":3,"target":3},"二次合格":{"actual":2,"target":2},"最終設定":{"actual":2,"target":2},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"3月":{"応募":{"actual":22,"target":22},"書類":{"actual":12,"target":12},"一次設定":{"actual":7,"target":7},"一次実施":{"actual":7,"target":7},"一次合格":{"actual":4,"target":4},"二次設定":{"actual":4,"target":4},"二次実施":{"actual":4,"target":4},"二次合格":{"actual":2,"target":2},"最終設定":{"actual":2,"target":2},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"4月":{"応募":{"actual":21,"target":24},"書類":{"actual":11,"target":13},"一次設定":{"actual":7,"target":8},"一次実施":{"actual":7,"target":8},"一次合格":{"actual":4,"target":5},"二次設定":{"actual":4,"target":4},"二次実施":{"actual":4,"target":4},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":2,"target":2},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"5月":{"応募":{"actual":29,"target":26},"書類":{"actual":16,"target":15},"一次設定":{"actual":10,"target":9},"一次実施":{"actual":9,"target":8},"一次合格":{"actual":6,"target":5},"二次設定":{"actual":6,"target":5},"二次実施":{"actual":4,"target":4},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":3,"target":3},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"6月":{"応募":{"actual":21,"target":22},"書類":{"actual":11,"target":12},"一次設定":{"actual":7,"target":7},"一次実施":{"actual":7,"target":7},"一次合格":{"actual":4,"target":4},"二次設定":{"actual":4,"target":4},"二次実施":{"actual":4,"target":4},"二次合格":{"actual":2,"target":2},"最終設定":{"actual":2,"target":2},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"通算":{"応募":{"actual":130,"target":132},"書類":{"actual":70,"target":73},"一次設定":{"actual":43,"target":44},"一次実施":{"actual":41,"target":41},"一次合格":{"actual":26,"target":26},"二次設定":{"actual":25,"target":24},"二次実施":{"actual":22,"target":22},"二次合格":{"actual":14,"target":14},"最終設定":{"actual":13,"target":13},"最終実施":{"actual":12,"target":12},"内定":{"actual":6,"target":6},"内定承諾":{"actual":6,"target":6}}},"エンタープライズセールス":{"1月":{"応募":{"actual":38,"target":36},"書類":{"actual":21,"target":20},"一次設定":{"actual":13,"target":12},"一次実施":{"actual":12,"target":11},"一次合格":{"actual":7,"target":7},"二次設定":{"actual":6,"target":6},"二次実施":{"actual":6,"target":6},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"2月":{"応募":{"actual":37,"target":40},"書類":{"actual":20,"target":22},"一次設定":{"actual":13,"target":14},"一次実施":{"actual":12,"target":13},"一次合格":{"actual":7,"target":8},"二次設定":{"actual":6,"target":7},"二次実施":{"actual":6,"target":7},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"3月":{"応募":{"actual":45,"target":45},"書類":{"actual":25,"target":25},"一次設定":{"actual":15,"target":15},"一次実施":{"actual":14,"target":14},"一次合格":{"actual":9,"target":9},"二次設定":{"actual":8,"target":8},"二次実施":{"actual":8,"target":8},"二次合格":{"actual":5,"target":5},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"4月":{"応募":{"actual":44,"target":50},"書類":{"actual":24,"target":27},"一次設定":{"actual":15,"target":17},"一次実施":{"actual":13,"target":15},"一次合格":{"actual":9,"target":10},"二次設定":{"actual":8,"target":9},"二次実施":{"actual":7,"target":8},"二次合格":{"actual":4,"target":5},"最終設定":{"actual":4,"target":5},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"5月":{"応募":{"actual":59,"target":54},"書類":{"actual":33,"target":30},"一次設定":{"actual":20,"target":18},"一次実施":{"actual":19,"target":17},"一次合格":{"actual":12,"target":11},"二次設定":{"actual":11,"target":10},"二次実施":{"actual":10,"target":9},"二次合格":{"actual":7,"target":6},"最終設定":{"actual":6,"target":5},"最終実施":{"actual":6,"target":5},"内定":{"actual":3,"target":3},"内定承諾":{"actual":2,"target":2}},"6月":{"応募":{"actual":43,"target":45},"書類":{"actual":24,"target":25},"一次設定":{"actual":14,"target":15},"一次実施":{"actual":13,"target":14},"一次合格":{"actual":9,"target":9},"二次設定":{"actual":8,"target":8},"二次実施":{"actual":8,"target":8},"二次合格":{"actual":5,"target":5},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"通算":{"応募":{"actual":266,"target":270},"書類":{"actual":147,"target":149},"一次設定":{"actual":90,"target":91},"一次実施":{"actual":83,"target":84},"一次合格":{"actual":53,"target":54},"二次設定":{"actual":47,"target":48},"二次実施":{"actual":45,"target":46},"二次合格":{"actual":29,"target":29},"最終設定":{"actual":26,"target":26},"最終実施":{"actual":25,"target":24},"内定":{"actual":13,"target":13},"内定承諾":{"actual":7,"target":7}}},"SDR":{"1月":{"応募":{"actual":59,"target":56},"書類":{"actual":33,"target":31},"一次設定":{"actual":20,"target":19},"一次実施":{"actual":18,"target":17},"一次合格":{"actual":12,"target":11},"二次設定":{"actual":10,"target":10},"二次実施":{"actual":10,"target":10},"二次合格":{"actual":6,"target":6},"最終設定":{"actual":6,"target":6},"最終実施":{"actual":5,"target":5},"内定":{"actual":3,"target":3},"内定承諾":{"actual":2,"target":2}},"2月":{"応募":{"actual":58,"target":63},"書類":{"actual":32,"target":35},"一次設定":{"actual":19,"target":21},"一次実施":{"actual":18,"target":20},"一次合格":{"actual":12,"target":13},"二次設定":{"actual":10,"target":11},"二次実施":{"actual":10,"target":11},"二次合格":{"actual":6,"target":7},"最終設定":{"actual":6,"target":6},"最終実施":{"actual":6,"target":6},"内定":{"actual":3,"target":3},"内定承諾":{"actual":2,"target":2}},"3月":{"応募":{"actual":70,"target":70},"書類":{"actual":38,"target":38},"一次設定":{"actual":24,"target":24},"一次実施":{"actual":22,"target":22},"一次合格":{"actual":14,"target":14},"二次設定":{"actual":13,"target":13},"二次実施":{"actual":12,"target":12},"二次合格":{"actual":8,"target":8},"最終設定":{"actual":7,"target":7},"最終実施":{"actual":6,"target":6},"内定":{"actual":4,"target":4},"内定承諾":{"actual":2,"target":2}},"4月":{"応募":{"actual":68,"target":77},"書類":{"actual":37,"target":42},"一次設定":{"actual":23,"target":26},"一次実施":{"actual":21,"target":24},"一次合格":{"actual":13,"target":15},"二次設定":{"actual":12,"target":14},"二次実施":{"actual":11,"target":13},"二次合格":{"actual":7,"target":8},"最終設定":{"actual":7,"target":8},"最終実施":{"actual":6,"target":7},"内定":{"actual":4,"target":4},"内定承諾":{"actual":2,"target":2}},"5月":{"応募":{"actual":92,"target":84},"書類":{"actual":51,"target":46},"一次設定":{"actual":32,"target":29},"一次実施":{"actual":29,"target":26},"一次合格":{"actual":19,"target":17},"二次設定":{"actual":16,"target":15},"二次実施":{"actual":15,"target":14},"二次合格":{"actual":10,"target":9},"最終設定":{"actual":9,"target":8},"最終実施":{"actual":9,"target":8},"内定":{"actual":4,"target":4},"内定承諾":{"actual":3,"target":3}},"6月":{"応募":{"actual":66,"target":70},"書類":{"actual":36,"target":38},"一次設定":{"actual":23,"target":24},"一次実施":{"actual":21,"target":22},"一次合格":{"actual":13,"target":14},"二次設定":{"actual":12,"target":13},"二次実施":{"actual":11,"target":12},"二次合格":{"actual":8,"target":8},"最終設定":{"actual":7,"target":7},"最終実施":{"actual":6,"target":6},"内定":{"actual":4,"target":4},"内定承諾":{"actual":2,"target":2}},"通算":{"応募":{"actual":413,"target":420},"書類":{"actual":227,"target":230},"一次設定":{"actual":141,"target":143},"一次実施":{"actual":129,"target":131},"一次合格":{"actual":83,"target":84},"二次設定":{"actual":73,"target":76},"二次実施":{"actual":69,"target":72},"二次合格":{"actual":45,"target":46},"最終設定":{"actual":42,"target":42},"最終実施":{"actual":38,"target":38},"内定":{"actual":22,"target":22},"内定承諾":{"actual":13,"target":13}}},"カスタマーサクセスマネージャー":{"1月":{"応募":{"actual":29,"target":28},"書類":{"actual":16,"target":15},"一次設定":{"actual":10,"target":10},"一次実施":{"actual":9,"target":9},"一次合格":{"actual":6,"target":6},"二次設定":{"actual":5,"target":5},"二次実施":{"actual":5,"target":5},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":3,"target":3},"最終実施":{"actual":3,"target":3},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"2月":{"応募":{"actual":29,"target":32},"書類":{"actual":16,"target":17},"一次設定":{"actual":10,"target":11},"一次実施":{"actual":9,"target":10},"一次合格":{"actual":6,"target":6},"二次設定":{"actual":6,"target":6},"二次実施":{"actual":5,"target":5},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":3,"target":3},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"3月":{"応募":{"actual":35,"target":35},"書類":{"actual":19,"target":19},"一次設定":{"actual":12,"target":12},"一次実施":{"actual":11,"target":11},"一次合格":{"actual":7,"target":7},"二次設定":{"actual":6,"target":6},"二次実施":{"actual":6,"target":6},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"4月":{"応募":{"actual":33,"target":38},"書類":{"actual":18,"target":21},"一次設定":{"actual":11,"target":13},"一次実施":{"actual":11,"target":12},"一次合格":{"actual":7,"target":8},"二次設定":{"actual":6,"target":7},"二次実施":{"actual":6,"target":7},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"5月":{"応募":{"actual":46,"target":42},"書類":{"actual":25,"target":23},"一次設定":{"actual":15,"target":14},"一次実施":{"actual":14,"target":13},"一次合格":{"actual":9,"target":8},"二次設定":{"actual":9,"target":8},"二次実施":{"actual":8,"target":7},"二次合格":{"actual":6,"target":5},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"6月":{"応募":{"actual":33,"target":35},"書類":{"actual":18,"target":19},"一次設定":{"actual":11,"target":12},"一次実施":{"actual":10,"target":11},"一次合格":{"actual":7,"target":7},"二次設定":{"actual":6,"target":6},"二次実施":{"actual":6,"target":6},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"通算":{"応募":{"actual":205,"target":210},"書類":{"actual":112,"target":114},"一次設定":{"actual":69,"target":72},"一次実施":{"actual":64,"target":66},"一次合格":{"actual":42,"target":42},"二次設定":{"actual":38,"target":38},"二次実施":{"actual":36,"target":36},"二次合格":{"actual":24,"target":23},"最終設定":{"actual":22,"target":22},"最終実施":{"actual":19,"target":19},"内定":{"actual":11,"target":11},"内定承諾":{"actual":6,"target":6}}},"コンテンツマーケター":{"1月":{"応募":{"actual":34,"target":32},"書類":{"actual":19,"target":18},"一次設定":{"actual":12,"target":11},"一次実施":{"actual":10,"target":10},"一次合格":{"actual":6,"target":6},"二次設定":{"actual":6,"target":6},"二次実施":{"actual":5,"target":5},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":3,"target":3},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"2月":{"応募":{"actual":33,"target":36},"書類":{"actual":18,"target":20},"一次設定":{"actual":11,"target":12},"一次実施":{"actual":10,"target":11},"一次合格":{"actual":6,"target":7},"二次設定":{"actual":6,"target":6},"二次実施":{"actual":6,"target":6},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"3月":{"応募":{"actual":40,"target":40},"書類":{"actual":22,"target":22},"一次設定":{"actual":14,"target":14},"一次実施":{"actual":12,"target":12},"一次合格":{"actual":8,"target":8},"二次設定":{"actual":7,"target":7},"二次実施":{"actual":7,"target":7},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"4月":{"応募":{"actual":39,"target":44},"書類":{"actual":21,"target":24},"一次設定":{"actual":13,"target":15},"一次実施":{"actual":12,"target":14},"一次合格":{"actual":8,"target":9},"二次設定":{"actual":7,"target":8},"二次実施":{"actual":6,"target":7},"二次合格":{"actual":4,"target":5},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"5月":{"応募":{"actual":53,"target":48},"書類":{"actual":29,"target":26},"一次設定":{"actual":18,"target":16},"一次実施":{"actual":16,"target":15},"一次合格":{"actual":11,"target":10},"二次設定":{"actual":10,"target":9},"二次実施":{"actual":9,"target":8},"二次合格":{"actual":6,"target":5},"最終設定":{"actual":6,"target":5},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"6月":{"応募":{"actual":38,"target":40},"書類":{"actual":21,"target":22},"一次設定":{"actual":13,"target":14},"一次実施":{"actual":11,"target":12},"一次合格":{"actual":8,"target":8},"二次設定":{"actual":7,"target":7},"二次実施":{"actual":7,"target":7},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"通算":{"応募":{"actual":237,"target":240},"書類":{"actual":130,"target":132},"一次設定":{"actual":81,"target":82},"一次実施":{"actual":71,"target":74},"一次合格":{"actual":47,"target":48},"二次設定":{"actual":43,"target":43},"二次実施":{"actual":40,"target":40},"二次合格":{"actual":26,"target":26},"最終設定":{"actual":25,"target":24},"最終実施":{"actual":22,"target":22},"内定":{"actual":12,"target":12},"内定承諾":{"actual":6,"target":6}}},"シニアプロダクトマネージャー":{"1月":{"応募":{"actual":21,"target":20},"書類":{"actual":12,"target":11},"一次設定":{"actual":7,"target":7},"一次実施":{"actual":6,"target":6},"一次合格":{"actual":4,"target":4},"二次設定":{"actual":4,"target":4},"二次実施":{"actual":3,"target":3},"二次合格":{"actual":2,"target":2},"最終設定":{"actual":2,"target":2},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"2月":{"応募":{"actual":20,"target":22},"書類":{"actual":11,"target":12},"一次設定":{"actual":7,"target":8},"一次実施":{"actual":6,"target":7},"一次合格":{"actual":4,"target":4},"二次設定":{"actual":4,"target":4},"二次実施":{"actual":4,"target":4},"二次合格":{"actual":2,"target":2},"最終設定":{"actual":2,"target":2},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"3月":{"応募":{"actual":25,"target":25},"書類":{"actual":14,"target":14},"一次設定":{"actual":8,"target":8},"一次実施":{"actual":8,"target":8},"一次合格":{"actual":5,"target":5},"二次設定":{"actual":4,"target":4},"二次実施":{"actual":4,"target":4},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":2,"target":2},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"4月":{"応募":{"actual":25,"target":28},"書類":{"actual":13,"target":15},"一次設定":{"actual":8,"target":9},"一次実施":{"actual":8,"target":9},"一次合格":{"actual":5,"target":6},"二次設定":{"actual":4,"target":5},"二次実施":{"actual":4,"target":5},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":3,"target":3},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"5月":{"応募":{"actual":33,"target":30},"書類":{"actual":18,"target":16},"一次設定":{"actual":11,"target":10},"一次実施":{"actual":10,"target":9},"一次合格":{"actual":7,"target":6},"二次設定":{"actual":6,"target":5},"二次実施":{"actual":6,"target":5},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":3,"target":3},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"6月":{"応募":{"actual":24,"target":25},"書類":{"actual":13,"target":14},"一次設定":{"actual":8,"target":8},"一次実施":{"actual":8,"target":8},"一次合格":{"actual":5,"target":5},"二次設定":{"actual":4,"target":4},"二次実施":{"actual":4,"target":4},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":2,"target":2},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"通算":{"応募":{"actual":148,"target":150},"書類":{"actual":81,"target":82},"一次設定":{"actual":49,"target":50},"一次実施":{"actual":46,"target":47},"一次合格":{"actual":30,"target":30},"二次設定":{"actual":26,"target":26},"二次実施":{"actual":25,"target":25},"二次合格":{"actual":16,"target":16},"最終設定":{"actual":14,"target":14},"最終実施":{"actual":13,"target":13},"内定":{"actual":7,"target":7},"内定承諾":{"actual":6,"target":6}}},"フロントエンドエンジニア":{"1月":{"応募":{"actual":46,"target":44},"書類":{"actual":25,"target":24},"一次設定":{"actual":16,"target":15},"一次実施":{"actual":15,"target":14},"一次合格":{"actual":9,"target":9},"二次設定":{"actual":8,"target":8},"二次実施":{"actual":7,"target":7},"二次合格":{"actual":5,"target":5},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"2月":{"応募":{"actual":46,"target":50},"書類":{"actual":25,"target":27},"一次設定":{"actual":16,"target":17},"一次実施":{"actual":14,"target":15},"一次合格":{"actual":9,"target":10},"二次設定":{"actual":8,"target":9},"二次実施":{"actual":7,"target":8},"二次合格":{"actual":5,"target":5},"最終設定":{"actual":5,"target":5},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"3月":{"応募":{"actual":55,"target":55},"書類":{"actual":30,"target":30},"一次設定":{"actual":19,"target":19},"一次実施":{"actual":17,"target":17},"一次合格":{"actual":11,"target":11},"二次設定":{"actual":10,"target":10},"二次実施":{"actual":9,"target":9},"二次合格":{"actual":6,"target":6},"最終設定":{"actual":6,"target":6},"最終実施":{"actual":5,"target":5},"内定":{"actual":3,"target":3},"内定承諾":{"actual":2,"target":2}},"4月":{"応募":{"actual":54,"target":61},"書類":{"actual":29,"target":33},"一次設定":{"actual":18,"target":21},"一次実施":{"actual":17,"target":19},"一次合格":{"actual":11,"target":12},"二次設定":{"actual":10,"target":11},"二次実施":{"actual":9,"target":10},"二次合格":{"actual":6,"target":7},"最終設定":{"actual":5,"target":6},"最終実施":{"actual":4,"target":5},"内定":{"actual":3,"target":3},"内定承諾":{"actual":2,"target":2}},"5月":{"応募":{"actual":73,"target":66},"書類":{"actual":40,"target":36},"一次設定":{"actual":24,"target":22},"一次実施":{"actual":22,"target":20},"一次合格":{"actual":14,"target":13},"二次設定":{"actual":13,"target":12},"二次実施":{"actual":12,"target":11},"二次合格":{"actual":8,"target":7},"最終設定":{"actual":8,"target":7},"最終実施":{"actual":7,"target":6},"内定":{"actual":3,"target":3},"内定承諾":{"actual":2,"target":2}},"6月":{"応募":{"actual":52,"target":55},"書類":{"actual":28,"target":30},"一次設定":{"actual":18,"target":19},"一次実施":{"actual":16,"target":17},"一次合格":{"actual":10,"target":11},"二次設定":{"actual":10,"target":10},"二次実施":{"actual":9,"target":9},"二次合格":{"actual":6,"target":6},"最終設定":{"actual":6,"target":6},"最終実施":{"actual":5,"target":5},"内定":{"actual":3,"target":3},"内定承諾":{"actual":2,"target":2}},"通算":{"応募":{"actual":326,"target":331},"書類":{"actual":177,"target":180},"一次設定":{"actual":111,"target":113},"一次実施":{"actual":101,"target":102},"一次合格":{"actual":64,"target":66},"二次設定":{"actual":59,"target":60},"二次実施":{"actual":53,"target":54},"二次合格":{"actual":36,"target":36},"最終設定":{"actual":34,"target":34},"最終実施":{"actual":29,"target":29},"内定":{"actual":16,"target":16},"内定承諾":{"actual":10,"target":10}}},"SRE":{"1月":{"応募":{"actual":25,"target":24},"書類":{"actual":14,"target":13},"一次設定":{"actual":8,"target":8},"一次実施":{"actual":7,"target":7},"一次合格":{"actual":5,"target":5},"二次設定":{"actual":4,"target":4},"二次実施":{"actual":4,"target":4},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":2,"target":2},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"2月":{"応募":{"actual":25,"target":27},"書類":{"actual":14,"target":15},"一次設定":{"actual":8,"target":9},"一次実施":{"actual":7,"target":8},"一次合格":{"actual":5,"target":5},"二次設定":{"actual":5,"target":5},"二次実施":{"actual":5,"target":5},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":3,"target":3},"最終実施":{"actual":2,"target":2},"内定":{"actual":1,"target":1},"内定承諾":{"actual":1,"target":1}},"3月":{"応募":{"actual":30,"target":30},"書類":{"actual":16,"target":16},"一次設定":{"actual":10,"target":10},"一次実施":{"actual":9,"target":9},"一次合格":{"actual":6,"target":6},"二次設定":{"actual":5,"target":5},"二次実施":{"actual":5,"target":5},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":3,"target":3},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"4月":{"応募":{"actual":29,"target":33},"書類":{"actual":16,"target":18},"一次設定":{"actual":10,"target":11},"一次実施":{"actual":9,"target":10},"一次合格":{"actual":6,"target":7},"二次設定":{"actual":5,"target":6},"二次実施":{"actual":5,"target":6},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":3,"target":3},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"5月":{"応募":{"actual":40,"target":36},"書類":{"actual":22,"target":20},"一次設定":{"actual":13,"target":12},"一次実施":{"actual":12,"target":11},"一次合格":{"actual":8,"target":7},"二次設定":{"actual":7,"target":6},"二次実施":{"actual":7,"target":6},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"6月":{"応募":{"actual":28,"target":30},"書類":{"actual":15,"target":16},"一次設定":{"actual":10,"target":10},"一次実施":{"actual":9,"target":9},"一次合格":{"actual":6,"target":6},"二次設定":{"actual":5,"target":5},"二次実施":{"actual":5,"target":5},"二次合格":{"actual":3,"target":3},"最終設定":{"actual":3,"target":3},"最終実施":{"actual":3,"target":3},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"通算":{"応募":{"actual":177,"target":180},"書類":{"actual":97,"target":98},"一次設定":{"actual":59,"target":60},"一次実施":{"actual":53,"target":54},"一次合格":{"actual":36,"target":36},"二次設定":{"actual":31,"target":31},"二次実施":{"actual":31,"target":31},"二次合格":{"actual":20,"target":20},"最終設定":{"actual":18,"target":18},"最終実施":{"actual":16,"target":16},"内定":{"actual":10,"target":10},"内定承諾":{"actual":6,"target":6}}},"採用人事":{"1月":{"応募":{"actual":42,"target":40},"書類":{"actual":23,"target":22},"一次設定":{"actual":15,"target":14},"一次実施":{"actual":13,"target":12},"一次合格":{"actual":8,"target":8},"二次設定":{"actual":7,"target":7},"二次実施":{"actual":7,"target":7},"二次合格":{"actual":4,"target":4},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"2月":{"応募":{"actual":41,"target":45},"書類":{"actual":23,"target":25},"一次設定":{"actual":14,"target":15},"一次実施":{"actual":13,"target":14},"一次合格":{"actual":8,"target":9},"二次設定":{"actual":7,"target":8},"二次実施":{"actual":7,"target":8},"二次合格":{"actual":5,"target":5},"最終設定":{"actual":4,"target":4},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":1,"target":1}},"3月":{"応募":{"actual":50,"target":50},"書類":{"actual":28,"target":28},"一次設定":{"actual":17,"target":17},"一次実施":{"actual":16,"target":16},"一次合格":{"actual":10,"target":10},"二次設定":{"actual":9,"target":9},"二次実施":{"actual":8,"target":8},"二次合格":{"actual":6,"target":6},"最終設定":{"actual":5,"target":5},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":2,"target":2}},"4月":{"応募":{"actual":48,"target":55},"書類":{"actual":26,"target":30},"一次設定":{"actual":17,"target":19},"一次実施":{"actual":15,"target":17},"一次合格":{"actual":10,"target":11},"二次設定":{"actual":9,"target":10},"二次実施":{"actual":8,"target":9},"二次合格":{"actual":5,"target":6},"最終設定":{"actual":5,"target":6},"最終実施":{"actual":4,"target":5},"内定":{"actual":3,"target":3},"内定承諾":{"actual":2,"target":2}},"5月":{"応募":{"actual":66,"target":60},"書類":{"actual":36,"target":33},"一次設定":{"actual":22,"target":20},"一次実施":{"actual":21,"target":19},"一次合格":{"actual":13,"target":12},"二次設定":{"actual":12,"target":11},"二次実施":{"actual":11,"target":10},"二次合格":{"actual":8,"target":7},"最終設定":{"actual":7,"target":6},"最終実施":{"actual":6,"target":5},"内定":{"actual":3,"target":3},"内定承諾":{"actual":2,"target":2}},"6月":{"応募":{"actual":48,"target":50},"書類":{"actual":27,"target":28},"一次設定":{"actual":16,"target":17},"一次実施":{"actual":15,"target":16},"一次合格":{"actual":10,"target":10},"二次設定":{"actual":9,"target":9},"二次実施":{"actual":8,"target":8},"二次合格":{"actual":6,"target":6},"最終設定":{"actual":5,"target":5},"最終実施":{"actual":4,"target":4},"内定":{"actual":2,"target":2},"内定承諾":{"actual":2,"target":2}},"通算":{"応募":{"actual":295,"target":300},"書類":{"actual":163,"target":166},"一次設定":{"actual":101,"target":102},"一次実施":{"actual":93,"target":94},"一次合格":{"actual":59,"target":60},"二次設定":{"actual":53,"target":54},"二次実施":{"actual":49,"target":50},"二次合格":{"actual":34,"target":34},"最終設定":{"actual":30,"target":30},"最終実施":{"actual":26,"target":26},"内定":{"actual":14,"target":14},"内定承諾":{"actual":10,"target":10}}}}},"updated":"2026-06-19T09:00:00.000Z"};
+
+const FIXED_HDRS=[
+  {id:'CEO',                name:'CEO',                type:'hdr',parent:null},
+  {id:'セールスGr',          name:'セールスGr',          type:'hdr',parent:'CEO'},
+  {id:'カスタマーサクセスGr',name:'カスタマーサクセスGr',type:'hdr',parent:'CEO'},
+  {id:'マーケティングGr',    name:'マーケティングGr',    type:'hdr',parent:'CEO'},
+  {id:'プロダクトGr',        name:'プロダクトGr',        type:'hdr',parent:'CEO'},
+  {id:'エンジニアリングGr',  name:'エンジニアリングGr',  type:'hdr',parent:'CEO'},
+  {id:'コーポレートGr',      name:'コーポレートGr',      type:'hdr',parent:'CEO'},
+];
+const PHASES=['書類通過数','一次面接実施','二次面接実施','最終面接実施','内定'];
+const PHASE_COLORS=['#42a5f5','#26c6da','#66bb6a','#ffa726','#ef5350'];
+// 【変更①】月別の色を系統違いに並べ替え（隣り合う月＝別系統。直近3ヶ月でも先頭3色が青/橙/緑で確実に区別できる）
+const MONTH_COLORS=['#2e75b6','#ed7d31','#70ad47','#7030a0','#e53935','#00897b','#9dc3e6','#f4b183','#a9d18e','#b18fcf','#ef9a9a','#9e9e9e'];
+// 採用計画カードのホバーに出すフェーズ（設定系＋応募/書類/内定/内定承諾に絞る）
+const HOVER_PHASES=['応募','書類','一次設定','二次設定','最終設定','内定','内定承諾'];
+// 採用計画の組織図で、兄弟の中で左端に固定したいノード（シートの名称と完全一致させる）
+const PIN_LEFT=[];
+const NW=138,GX=18,GY=55,PAD=60;
+let currentTab='recruit';
+let cachedData=null;
+let hideTimer=null;
+
+function urgClass(u){
+  if(!u)return'';
+  const s=u.toLowerCase().replace(/\s/g,'');
+  if(s==='veryhigh')return'urg-vh';
+  if(s==='high')return'urg-h';
+  if(s==='middle')return'urg-m';
+  return'urg-l';
+}
+function recruitNodeClass(s){
+  if(s==='決定')return'n-decided';
+  if(s==='クローズ')return'n-closed';
+  return'n-recruit';
+}
+function statusLabel(s){
+  const m={'決定':'✅ 決定','公開中':'📢 公開中','公開準備中':'📋 準備中','未着手':'⬜ 未着手','クローズ':'— クローズ'};
+  return m[s]||s;
+}
+function showMeta(s){return['未着手','公開準備中','公開中'].includes(s);}
+
+// ── 直近3ヶ月の月リストを返す（データに存在する月のみ。なければ末尾3つでフォールバック）──
+function getRecent3Months(allMonths){
+  // サンプル版：実時間に依存せず、存在する月の末尾3つを返す
+  const noTotal=(allMonths||[]).filter(m=>m!=='通算');
+  return noTotal.slice(-3);
+}
+
+// ── パイプラインポップアップ（【変更②】集計シート=pipelineKPI を参照し、直近3ヶ月の実績/目標を表示）──
+const popup=document.getElementById('popup');
+
+function showPipeline(posName,kpi,nodeEl){
+  if(!kpi||!kpi.data||!kpi.data[posName])return;
+  clearTimeout(hideTimer);
+  const posData=kpi.data[posName];
+  const months=getRecent3Months(kpi.months||[]);
+
+  let bodyRows='';
+  HOVER_PHASES.forEach(ph=>{
+    let cells='';
+    let aSum=0,tSum=0,any=false;
+    months.forEach(m=>{
+      const d=posData[m]&&posData[m][ph];
+      if(d){
+        const a=(d.actual!==undefined&&d.actual!==null)?d.actual:0;
+        const t=(d.target!==undefined&&d.target!==null)?d.target:0;
+        aSum+=a;tSum+=t;any=true;
+        cells+=`<td><strong>${a}</strong><span class="tgt">/${t}</span></td>`;
+      }else{
+        cells+=`<td class="tgt">—</td>`;
+      }
+    });
+    // 直近3ヶ月を通算した数字（実績計/目標計）
+    const totalCell=any
+      ?`<td class="total-cell"><strong>${aSum}</strong><span class="tgt">/${tSum}</span></td>`
+      :`<td class="tgt total-cell">—</td>`;
+    bodyRows+=`<tr><td>${ph}</td>${cells}${totalCell}</tr>`;
+  });
+
+  const monthHeaders=months.map(m=>`<th>${m}</th>`).join('');
+  const html=`<div class="popup-note">数値は 実績/目標</div><table class="pipe-table"><thead><tr><th>フェーズ</th>${monthHeaders}<th class="total-cell">3ヶ月計</th></tr></thead><tbody>${bodyRows}</tbody></table>`;
+
+  document.getElementById('popup-title').textContent=posName;
+  document.getElementById('popup-body').innerHTML=html;
+
+  popup.classList.add('show');
+
+  // 位置計算（カード右側、画面端で左に反転）
+  const rect=nodeEl.getBoundingClientRect();
+  const pw=popup.offsetWidth||340;
+  const ph=popup.offsetHeight||180;
+  let left=rect.right+10;
+  let top=rect.top;
+  if(left+pw>window.innerWidth-10)left=rect.left-pw-10;
+  if(top+ph>window.innerHeight-10)top=window.innerHeight-ph-10;
+  popup.style.left=Math.max(10,left)+'px';
+  popup.style.top=Math.max(10,top)+'px';
+}
+
+function hidePipeline(){
+  hideTimer=setTimeout(()=>popup.classList.remove('show'),150);
+}
+
+// ── ノード構築 ──
+function buildRecruitNodes(data){
+  const nodes=[...FIXED_HDRS];
+  const idSet=new Set(FIXED_HDRS.map(n=>n.id));
+  (data.members||[]).forEach(m=>{
+    const id=m.role||m.name;
+    nodes.push({id,name:id,area:m.area,type:'existing',parent:m.parent||null});
+    idSet.add(id);
+  });
+  (data.positions||[]).forEach(p=>{
+    nodes.push({id:p.name,name:p.name,area:p.area,type:'pos',
+      status:p.status,parent:p.parent||null,urgency:p.urgency,deadline:p.deadline});
+    idSet.add(p.name);
+  });
+  return nodes.map(n=>({...n,parent:(n.parent&&idSet.has(n.parent))?n.parent:null}));
+}
+
+
+// ── レイアウト ──
+// leftAlign=true: 子ノードはサブツリー左端に置く（左寄せ）。ただしCEOは子の中央に再配置。
+// pinLeft: 兄弟の中で先頭（左端）に固定したいノードidの配列
+function layout(nodes,leftAlign,pinLeft){
+  const typeById={};
+  nodes.forEach(n=>{typeById[n.id]=n.type;});
+  const isHeader=id=>{const t=typeById[id];return t==='hdr'||t==='str-hdr';};
+  // 子の並び順: ①pinLeftを最優先で左 ②ヘッダー(Gr)より通常ポジションを先（=CEO直下ポジションをGrの左へ） ③同ランクは元の順序維持
+  function childOrder(arr){
+    return arr.map((id,i)=>({id,i})).sort((a,b)=>{
+      const pa=pinLeft?pinLeft.indexOf(a.id):-1, pb=pinLeft?pinLeft.indexOf(b.id):-1;
+      const ra=pa>=0?pa:(isHeader(a.id)?2000:1000);
+      const rb=pb>=0?pb:(isHeader(b.id)?2000:1000);
+      return ra!==rb?ra-rb:a.i-b.i;
+    }).map(o=>o.id);
+  }
+  const ch={};
+  nodes.forEach(n=>{
+    if(!ch[n.id])ch[n.id]=[];
+    if(n.parent){if(!ch[n.parent])ch[n.parent]=[];ch[n.parent].push(n.id);}
+  });
+  Object.keys(ch).forEach(k=>{ch[k]=childOrder(ch[k]);});
+  const swC={};
+  function sw(id){
+    if(swC[id]!==undefined)return swC[id];
+    const c=ch[id]||[];
+    return swC[id]=Math.max(NW,c.length===0?NW:c.reduce((s,x)=>s+sw(x),0)+(c.length-1)*GX);
+  }
+  nodes.forEach(n=>sw(n.id));
+  const dep={};const vis=new Set();
+  let roots=nodes.filter(n=>!n.parent).map(n=>n.id);
+  const q=roots.map(id=>({id,d:0}));
+  roots.forEach(id=>{dep[id]=0;vis.add(id);});
+  while(q.length){const{id,d}=q.shift();(ch[id]||[]).forEach(c=>{if(!vis.has(c)){vis.add(c);dep[c]=d+1;q.push({id:c,d:d+1});}});}
+  nodes.forEach(n=>{if(dep[n.id]===undefined)dep[n.id]=0;});
+  const pos={};
+  function place(id,lx){
+    pos[id]={x:leftAlign?lx:lx+(sw(id)-NW)/2,y:dep[id]*(80+GY)+PAD};
+    let cx=lx;(ch[id]||[]).forEach(c=>{place(c,cx);cx+=sw(c)+GX;});
+  }
+  let rx=PAD;roots.forEach(r=>{place(r,rx);rx+=sw(r)+GX;});
+  nodes.forEach(n=>{if(!pos[n.id]){pos[n.id]={x:rx,y:PAD};rx+=NW+GX;}});
+  // CEOだけは子ノードの中央（ど真ん中）に再配置
+  if(leftAlign&&pos['CEO']&&(ch['CEO']||[]).length){
+    const xs=ch['CEO'].map(c=>pos[c]&&pos[c].x).filter(v=>v!==undefined);
+    if(xs.length)pos['CEO'].x=(Math.min(...xs)+Math.max(...xs))/2;
+  }
+  return pos;
+}
+
+// ── 描画 ──
+function render(nodes,kpi,leftAlign,pinLeft){
+  const pos=layout(nodes,leftAlign,pinLeft);
+  document.querySelectorAll('.node').forEach(e=>e.remove());
+  document.getElementById('edges').innerHTML='';
+  document.getElementById('loading').style.display='none';
+  popup.classList.remove('show');
+  const els={};
+
+  nodes.forEach(n=>{
+    const p=pos[n.id];if(!p)return;
+    const el=document.createElement('div');
+    el.className='node';
+
+    if(n.type==='hdr'){
+      el.classList.add('n-hdr');
+      el.innerHTML=`<div class="node-label">${n.name}</div>`;
+    } else if(n.type==='str-hdr'){
+      el.classList.add('n-str-hdr');
+      el.innerHTML=`<div class="node-label">${n.name}</div>`;
+    } else if(n.type==='str-node'){
+      el.classList.add('n-str-node');
+      el.innerHTML=`<div class="node-label">${n.name}</div>${n.area?`<div class="node-area">${n.area}</div>`:''}`;
+    } else if(n.type==='existing'){
+      el.classList.add('n-existing');
+      el.innerHTML=`<div class="node-label">${n.name}</div>${n.area?`<div class="node-area">${n.area}</div>`:''}`;
+    } else {
+      el.classList.add(recruitNodeClass(n.status));
+      let meta='';
+      if(showMeta(n.status)){
+        const uc=urgClass(n.urgency);
+        const urgHtml=n.urgency?`<span class="urg ${uc}">${n.urgency}</span>`:'';
+        const dlHtml=n.deadline?`<span class="node-deadline">⏰${n.deadline}</span>`:'';
+        if(urgHtml||dlHtml)meta=`<div class="node-meta">${urgHtml}${dlHtml}</div>`;
+      }
+      el.innerHTML=`<div class="node-label">${n.name}</div>${n.area?`<div class="node-area">${n.area}</div>`:''}<span class="node-status">${statusLabel(n.status)}</span>${meta}`;
+
+      // ホバーでパイプライン表示（直近3ヶ月の実績/目標）
+      if(kpi&&kpi.data&&kpi.data[n.name]){
+        el.classList.add('has-pipeline');
+        el.addEventListener('mouseenter',()=>showPipeline(n.name,kpi,el));
+        el.addEventListener('mouseleave',hidePipeline);
+      }
+    }
+    el.style.left=p.x+'px';el.style.top=p.y+'px';
+    document.getElementById('canvas').appendChild(el);
+    els[n.id]={el,p};
+  });
+
+  requestAnimationFrame(()=>{
+    const svg=document.getElementById('edges');
+    nodes.forEach(n=>{
+      if(!n.parent||!els[n.id]||!els[n.parent])return;
+      const pp=els[n.parent].p,cp=els[n.id].p;
+      const ph=els[n.parent].el.offsetHeight;
+      const x1=pp.x+NW/2,y1=pp.y+ph,x2=cp.x+NW/2,y2=cp.y,my=(y1+y2)/2;
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d',`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`);
+      path.setAttribute('stroke','#b0b5ae');path.setAttribute('stroke-width','1.5');path.setAttribute('fill','none');
+      svg.appendChild(path);
+    });
+    const maxX=Math.max(...Object.values(pos).map(p=>p.x))+NW+PAD;
+    const maxY=Math.max(...Object.values(pos).map(p=>p.y))+120+PAD;
+    const cv=document.getElementById('canvas');
+    cv.style.width=maxX+'px';cv.style.height=maxY+'px';
+    svg.setAttribute('width',maxX);svg.setAttribute('height',maxY);
+  });
+}
+
+function renderTab(data){
+  // ホバー用に pipelineKPI を渡す。採用計画タブは左寄せ（CEO直下を一番左に）
+  const kpi=data.pipelineKPI||{months:[],data:{}};
+  render(buildRecruitNodes(data),kpi,true,PIN_LEFT);
+}
+
+let currentPeriod='total';
+
+function switchTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  document.getElementById('leg-recruit').style.display  =tab==='recruit'?'flex':'none';
+  document.getElementById('leg-pipeline').style.display =tab==='pipeline'?'flex':'none';
+  // 表示エリアの切り替え
+  const canvasWrap=document.getElementById('canvas-wrap');
+  const pipeWrap=document.getElementById('pipeline-wrap');
+  if(tab==='pipeline'){
+    canvasWrap.style.display='none';
+    pipeWrap.classList.add('show');
+    if(cachedData)renderPipeline(cachedData);
+  } else {
+    canvasWrap.style.display='block';
+    pipeWrap.classList.remove('show');
+    if(cachedData)renderTab(cachedData);
+  }
+}
+
+// ── パイプライン描画 ──
+const PHASE_ORDER=['応募','書類','一次設定','一次実施','一次合格','二次設定','二次実施','二次合格','最終設定','最終実施','内定','内定承諾'];
+
+function getVisibleMonths(allMonths){
+  if(currentPeriod==='total') return ['通算'];
+  if(currentPeriod==='recent3') return getRecent3Months(allMonths);
+  return allMonths;
+}
+
+// パイプラインの表示順を採用計画（=KPI入力A列）の並びに準拠させる
+function getOrderedPositions(data){
+  const kpi=data.pipelineKPI||{data:{}};
+  const ordered=[];
+  const seen=new Set();
+  (data.positions||[]).forEach(p=>{
+    const nm=p.name;
+    if(nm&&kpi.data[nm]&&!seen.has(nm)){ordered.push(nm);seen.add(nm);}
+  });
+  // 採用計画に見つからない（孤立した）ポジションは末尾に
+  Object.keys(kpi.data).forEach(k=>{if(!seen.has(k)){ordered.push(k);seen.add(k);}});
+  return ordered;
+}
+
+function renderPipeline(data){
+  const kpi=data.pipelineKPI;
+  const wrap=document.getElementById('pipeline-wrap');
+  if(!kpi||!kpi.data||Object.keys(kpi.data).length===0){
+    wrap.innerHTML='<p style="color:var(--muted);font-size:13px">集計シートのデータが取得できませんでした。</p>';
+    return;
+  }
+
+  const visMonths=getVisibleMonths(kpi.months);
+
+  // 月の色凡例
+  const mleg=document.getElementById('month-legend');
+  mleg.innerHTML=visMonths.map((m,i)=>
+    `<span class="mlegend-item"><span class="mlegend-dot" style="background:${MONTH_COLORS[i%MONTH_COLORS.length]}"></span>${m}</span>`
+  ).join('');
+
+  // 各ポジションのファネルを描画（採用計画＝KPI入力A列の順）
+  let html='';
+  getOrderedPositions(data).forEach(pos=>{
+    const posData=kpi.data[pos];
+    if(!posData) return;
+    // このポジションに表示月のデータがあるか
+    const hasData=visMonths.some(m=>posData[m]);
+    if(!hasData) return;
+
+    // 全フェーズ・全月の最大値（バーの高さ正規化用）
+    let maxVal=1;
+    PHASE_ORDER.forEach(ph=>{
+      visMonths.forEach(m=>{
+        const d=posData[m]&&posData[m][ph];
+        if(d){
+          maxVal=Math.max(maxVal,d.target||0,d.actual||0);
+        }
+      });
+    });
+
+    let cols='';
+    PHASE_ORDER.forEach(ph=>{
+      // 目標バー（積み上げ）と実績バー（積み上げ）
+      let targetSegs='',actualSegs='';
+      let targetTotal=0,actualTotal=0;
+      visMonths.forEach((m,mi)=>{
+        const d=posData[m]&&posData[m][ph];
+        if(!d)return;
+        const color=MONTH_COLORS[mi%MONTH_COLORS.length];
+        const tH=Math.round((d.target/maxVal)*160);
+        const aH=Math.round((d.actual/maxVal)*160);
+        if(d.target>0){
+          targetSegs+=`<div class="bar-seg" style="height:${tH}px;background:${color}">${d.target}</div>`;
+          targetTotal+=d.target;
+        }
+        if(d.actual>0){
+          actualSegs+=`<div class="bar-seg" style="height:${aH}px;background:${color}">${d.actual}</div>`;
+          actualTotal+=d.actual;
+        }
+      });
+
+      cols+=`<div class="phase-col">
+        <div class="phase-bars">
+          <div class="bar-group">
+            <div class="bar-total">${targetTotal||''}</div>
+            <div class="bar-stack">${targetSegs}</div>
+            <div class="bar-label">目標</div>
+          </div>
+          <div class="bar-group">
+            <div class="bar-total">${actualTotal||''}</div>
+            <div class="bar-stack">${actualSegs}</div>
+            <div class="bar-label">実績</div>
+          </div>
+        </div>
+        <div class="phase-name">${ph}</div>
+      </div>`;
+    });
+
+    html+=`<div class="pos-funnel">
+      <div class="pos-funnel-title">${pos}</div>
+      <div class="funnel-grid">${cols}</div>
+    </div>`;
+  });
+
+  wrap.innerHTML=html||'<p style="color:var(--muted);font-size:13px">表示できるデータがありません。</p>';
+}
+
+function setPeriod(period){
+  currentPeriod=period;
+  document.querySelectorAll('.period-btn').forEach(b=>b.classList.toggle('active',b.dataset.period===period));
+  if(cachedData)renderPipeline(cachedData);
+}
+
+const dot=document.getElementById('dot'),lu=document.getElementById('last-updated');
+// サンプル版：GASのサーバー呼び出しの代わりに、埋め込んだダミーデータを返す
+function getData(){ return SAMPLE_DATA; }
+function fetchAndRender(){
+  dot.classList.add('loading');
+  const data=getData();
+  cachedData=data;
+  if(currentTab==='pipeline')renderPipeline(data);
+  else renderTab(data);
+  const n=new Date();
+  lu.textContent=`最終更新: ${n.getHours()}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+  dot.classList.remove('loading');dot.style.background='#4caf50';
+}
+document.getElementById('btn-refresh').addEventListener('click',fetchAndRender);
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)));
+document.querySelectorAll('.period-btn').forEach(b=>b.addEventListener('click',()=>setPeriod(b.dataset.period)));
+fetchAndRender();
+</script>
+</body>
+</html>
